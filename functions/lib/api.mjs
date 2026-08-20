@@ -133,12 +133,35 @@ function findById(collection, id) {
   return collection.find((item) => item.id === id);
 }
 
+function requiredExercises(state, occurrence) {
+  return occurrence.blockId ? state.exercises.filter((exercise) => exercise.blockId === occurrence.blockId && !exercise.archived) : [];
+}
+
+function isCardioChoice(state, occurrence) {
+  return occurrence.kind === "cardio" && findById(state.blocks, occurrence.blockId)?.category === "cardio";
+}
+
+function performedExerciseIds(state, sessionId) {
+  return new Set(
+    state.records
+      .filter((record) => record.sessionId === sessionId)
+      .flatMap((record) => [record.plannedExerciseId, record.exerciseId].filter(Boolean)),
+  );
+}
+
+function sessionIsComplete(state, session, occurrence) {
+  const required = requiredExercises(state, occurrence);
+  const performed = performedExerciseIds(state, session.id);
+  if (isCardioChoice(state, occurrence)) return required.some((exercise) => performed.has(exercise.id));
+  if (occurrence.kind === "cardio" && required.length === 0) return performed.size > 0;
+  return required.length > 0 && required.every((exercise) => performed.has(exercise.id));
+}
+
 function recalculateSession(state, session) {
   if (!session || session.quickCompleted || session.status === "skipped") return;
   const occurrence = getOccurrence(state, session.plannedDate);
-  const required = occurrence.blockId ? state.exercises.filter((exercise) => exercise.blockId === occurrence.blockId && !exercise.archived) : [];
-  const performed = new Set(state.records.filter((record) => record.sessionId === session.id).map((record) => record.plannedExerciseId || record.exerciseId));
-  session.status = required.length > 0 && required.every((exercise) => performed.has(exercise.id)) ? "completed" : performed.size > 0 ? "partial" : "in-progress";
+  const performed = performedExerciseIds(state, session.id);
+  session.status = sessionIsComplete(state, session, occurrence) ? "completed" : performed.size > 0 ? "partial" : "in-progress";
 }
 
 function collectHistory(state, from, to, exerciseId, kind) {
@@ -447,11 +470,9 @@ export function createApi(env = {}) {
             };
             state.records.push(record);
             if (!session.quickCompleted) {
-              session.exerciseStates = { ...session.exerciseStates, [body.exerciseId]: "completed" };
+              session.exerciseStates = { ...session.exerciseStates, [actualExercise?.id || body.exerciseId]: "completed" };
               const occurrence = getOccurrence(state, session.plannedDate);
-              const required = occurrence.blockId ? state.exercises.filter((exercise) => exercise.blockId === occurrence.blockId && !exercise.archived) : [];
-              const completed = required.length > 0 && required.every((exercise) => session.exerciseStates[exercise.id] === "completed");
-              session.status = completed ? "completed" : "partial";
+              session.status = sessionIsComplete(state, session, occurrence) ? "completed" : "partial";
             }
             session.updatedAt = new Date().toISOString();
             return record;

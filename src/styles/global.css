@@ -41,7 +41,9 @@ button { cursor: pointer; }
 .nav-button { display: flex; width: 100%; align-items: center; justify-content: center; gap: .5rem; border: 1px solid transparent; border-radius: .75rem; padding: .75rem .8rem; color: #8293aa; font-size: .8rem; font-weight: 650; }
 .nav-button.is-active { border-color: rgba(114,231,224,.14); background: rgba(114,231,224,.08); color: #e3fffb; }
 .day-card { min-height: 126px; border: 1px solid rgba(148,163,184,.12); border-radius: 1rem; background: rgba(255,255,255,.025); padding: .9rem; text-align: left; transition: transform .2s, border-color .2s, background .2s; }
-.day-card:hover, .day-card.is-today { transform: translateY(-2px); border-color: rgba(114,231,224,.5); background: rgba(114,231,224,.08); }
+.day-card:hover, .day-card.is-selected { transform: translateY(-2px); border-color: rgba(114,231,224,.5); background: rgba(114,231,224,.08); }
+.day-card.is-today { border-color: rgba(199,243,107,.28); }
+.today-badge { border: 1px solid rgba(199,243,107,.28); border-radius: 999px; background: rgba(199,243,107,.1); color: #d9ff8f; padding: .2rem .45rem; font-size: .62rem; font-weight: 750; }
 .day-card.is-rest { opacity: .66; }
 .metric-card { border: 1px solid rgba(148,163,184,.12); border-radius: 1rem; background: rgba(255,255,255,.03); padding: 1rem; }
 .exercise-row { border: 1px solid rgba(148,163,184,.1); border-radius: .9rem; background: rgba(3,12,23,.35); padding: 1rem; }

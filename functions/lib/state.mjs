@@ -11,6 +11,7 @@ const seedBlocks = [
   { id: "block-a", name: "A 上肢推", category: "push", description: "胸、三头和核心", archived: false },
   { id: "block-b", name: "B 上肢拉", category: "pull", description: "背、后链和核心", archived: false },
   { id: "block-c", name: "C 下肢", category: "legs", description: "腿、臀和核心", archived: false },
+  { id: "block-cardio", name: "D 有氧", category: "cardio", description: "心肺、耐力和节奏", archived: false },
 ];
 
 const seedExercises = [
@@ -29,6 +30,9 @@ const seedExercises = [
   ["exercise-13", "block-c", "提踵", "小腿", 3, "20", ""],
   ["exercise-14", "block-c", "平板支撑", "核心", 3, "30秒", ""],
   ["exercise-15", "block-c", "仰卧起坐", "核心", 3, "20", ""],
+  ["exercise-16", "block-cardio", "跑步", "心肺", 1, "20-30分钟", "保持可以说短句的节奏"],
+  ["exercise-17", "block-cardio", "划船机", "心肺", 1, "20-25分钟", "推腿、摆髋、拉手，动作连贯"],
+  ["exercise-18", "block-cardio", "快走 / 坡走", "心肺", 1, "30-40分钟", "以微喘但可持续为准"],
 ].map(([id, blockId, name, targetPart, sets, reps, note], sortOrder) => ({
   id,
   blockId,
@@ -43,11 +47,11 @@ const seedExercises = [
 }));
 
 const seedWeeklyPlan = {
-  1: { kind: "cardio", cardioDesc: "跑步 3km 或划船 20-22min", blockId: null },
+  1: { kind: "cardio", cardioDesc: "跑步 3km 或划船 20-22min", blockId: "block-cardio" },
   2: { kind: "block", cardioDesc: null, blockId: "block-c" },
   3: { kind: "rest", cardioDesc: "散步/拉伸", blockId: null },
   4: { kind: "block", cardioDesc: null, blockId: "block-a" },
-  5: { kind: "cardio", cardioDesc: "跑步 4km 或划船 25min", blockId: null },
+  5: { kind: "cardio", cardioDesc: "跑步 4km 或划船 25min", blockId: "block-cardio" },
   6: { kind: "block", cardioDesc: null, blockId: "block-b" },
   7: { kind: "rest", cardioDesc: null, blockId: null },
 };

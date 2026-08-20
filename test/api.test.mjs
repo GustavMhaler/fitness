@@ -44,7 +44,9 @@ test("a user can initialize a seed plan and complete the current workout without
   const initialized = await request(api, "initialize", { method: "POST", cookie, body: { mode: "seed" } });
   assert.equal(initialized.response.status, 200);
   assert.equal(initialized.data.initialized, true);
-  assert.equal(initialized.data.blocks.length, 3);
+  assert.equal(initialized.data.blocks.length, 4);
+  assert.equal(initialized.data.blocks.find((block) => block.id === "block-cardio")?.category, "cardio");
+  assert.equal(initialized.data.weeklyPlan[1].blockId, "block-cardio");
 
   const quick = await request(api, "sessions", {
     method: "POST",
@@ -61,6 +63,36 @@ test("a user can initialize a seed plan and complete the current workout without
     body: { plannedDate: "2026-08-20", mode: "quick", clientRequestId: "tap-1" },
   });
   assert.equal(duplicate.data.session.id, quick.data.session.id);
+});
+
+test("a cardio block offers selectable actions and one action completes the cardio day", async () => {
+  const { api, cookie } = await authenticatedApi();
+  const initialized = await request(api, "initialize", { method: "POST", cookie, body: { mode: "seed" } });
+  const cardio = initialized.data.exercises.find((exercise) => exercise.blockId === "block-cardio");
+  assert.ok(cardio);
+
+  const session = await request(api, "sessions", {
+    method: "POST",
+    cookie,
+    body: { plannedDate: "2026-08-17", mode: "detail" },
+  });
+  const record = await request(api, "records", {
+    method: "POST",
+    cookie,
+    body: {
+      sessionId: session.data.session.id,
+      exerciseId: cardio.id,
+      actualExerciseId: cardio.id,
+      actualDate: "2026-08-17",
+      duration: 20,
+      clientRequestId: "cardio-record-1",
+    },
+  });
+
+  assert.equal(record.response.status, 201);
+  assert.equal(record.data.record.exerciseId, cardio.id);
+  const bootstrap = await request(api, "bootstrap?date=2026-08-17", { cookie });
+  assert.equal(bootstrap.data.sessions[0].status, "completed");
 });
 
 test("stale plan edits return a conflict instead of silently overwriting a newer device", async () => {
