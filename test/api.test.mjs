@@ -80,3 +80,31 @@ test("stale plan edits return a conflict instead of silently overwriting a newer
   assert.equal(stale.response.status, 409);
   assert.equal(stale.data.code, "conflict");
 });
+
+test("rest days cannot create sessions and the configured week starts on Monday", async () => {
+  const { api, cookie } = await authenticatedApi();
+  await request(api, "initialize", { method: "POST", cookie, body: { mode: "seed" } });
+  const rest = await request(api, "sessions", { method: "POST", cookie, body: { plannedDate: "2026-08-19", mode: "quick" } });
+  assert.equal(rest.response.status, 400);
+  const bootstrap = await request(api, "bootstrap?date=2026-08-20", { cookie });
+  assert.equal(bootstrap.data.weekStart, "2026-08-17");
+  assert.equal(bootstrap.data.occurrences[0].plannedDate, "2026-08-17");
+});
+
+test("passcode rotation invalidates the old passcode and record retries are idempotent", async () => {
+  const { api, cookie } = await authenticatedApi();
+  await request(api, "initialize", { method: "POST", cookie, body: { mode: "seed" } });
+  const changed = await request(api, "auth/change", { method: "POST", cookie, body: { currentPasscode: "correct-horse", newPasscode: "new-correct-horse" } });
+  assert.equal(changed.response.status, 200);
+
+  const oldAuth = await request(api, "auth", { method: "POST", body: { passcode: "correct-horse" } });
+  assert.equal(oldAuth.response.status, 401);
+  const newAuth = await request(api, "auth", { method: "POST", body: { passcode: "new-correct-horse" } });
+  assert.equal(newAuth.response.status, 200);
+
+  const session = await request(api, "sessions", { method: "POST", cookie: newAuth.cookie, body: { plannedDate: "2026-08-20", mode: "detail" } });
+  const recordBody = { sessionId: session.data.session.id, exerciseId: "exercise-1", actualDate: "2026-08-20", reps: 5, clientRequestId: "record-retry-1" };
+  const record = await request(api, "records", { method: "POST", cookie: newAuth.cookie, body: recordBody });
+  const retry = await request(api, "records", { method: "POST", cookie: newAuth.cookie, body: recordBody });
+  assert.equal(record.data.record.id, retry.data.record.id);
+});

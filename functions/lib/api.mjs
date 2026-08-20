@@ -1,4 +1,4 @@
-import { calculateAdherence } from "../../src/lib/domain.mjs";
+import { calculateAdherence, makeOccurrence } from "../../src/lib/domain.mjs";
 import {
   addDays,
   createEmptyState,
@@ -6,7 +6,9 @@ import {
   getOccurrence,
   getToday,
   listOccurrences,
+  materializeOccurrences,
   nextId,
+  startOfWeek,
   summarizeState,
 } from "./state.mjs";
 import { ConflictError, D1Store, MemoryStore } from "./store.mjs";
@@ -63,7 +65,7 @@ async function getPasscodeHash(passcode, salt) {
 }
 
 async function verifyPasscode(passcode, state, configuredPasscode) {
-  if (configuredPasscode && constantTimeEqual(passcode, configuredPasscode)) return true;
+  if (!state.access?.overrideHash && configuredPasscode && constantTimeEqual(passcode, configuredPasscode)) return true;
   if (!state.access?.overrideHash || !state.access.overrideSalt) return false;
   const candidate = await getPasscodeHash(passcode, state.access.overrideSalt);
   return constantTimeEqual(candidate, state.access.overrideHash);
@@ -99,11 +101,13 @@ function expectedVersion(body, request) {
 
 function clientData(state, version, date) {
   const today = date || getToday(state.settings.timezone);
+  const weekStart = startOfWeek(today, state.settings.weekStartsOn);
   return {
     version,
     today,
+    weekStart,
     ...summarizeState(state),
-    occurrences: listOccurrences(state, today, 14),
+    occurrences: listOccurrences(state, weekStart, 14),
   };
 }
 
@@ -151,7 +155,17 @@ function collectHistory(state, from, to, exerciseId) {
     const session = state.sessions.find((item) => item.plannedDate === date);
     return { ...occurrence, status: session?.status ?? occurrence.status };
   });
-  return { records, occurrences, adherence: calculateAdherence(occurrences) };
+  const trendCounts = new Map();
+  for (const record of records) trendCounts.set(record.exerciseId, (trendCounts.get(record.exerciseId) || 0) + 1);
+  const trends = [...trendCounts.entries()].map(([id, count]) => ({
+    name: findById(state.exercises, id)?.name || records.find((record) => record.exerciseId === id)?.exerciseName || "已归档动作",
+    count,
+  })).sort((left, right) => right.count - left.count).slice(0, 8);
+  const frequency = new Set(state.sessions.filter((session) => {
+    const date = session.actualDate || session.plannedDate;
+    return date >= (from || "0000-00-00") && date <= (to || "9999-99-99") && session.status !== "skipped";
+  }).map((session) => session.actualDate || session.plannedDate)).size;
+  return { records, occurrences, adherence: calculateAdherence(occurrences), frequency, trends };
 }
 
 export function createApi(env = {}) {
@@ -202,7 +216,10 @@ export function createApi(env = {}) {
         if (path === "initialize" && method === "POST") {
           if (current.state.initialized) return json({ error: "应用已经初始化" }, 409);
           const mode = body.mode === "seed" ? "seed" : "blank";
-          const result = await store.update((state) => Object.assign(state, mode === "seed" ? createSeedState() : { ...createEmptyState(), initialized: true }), current.version);
+          const result = await store.update((state) => {
+            Object.assign(state, mode === "seed" ? createSeedState() : { ...createEmptyState(), initialized: true });
+            materializeOccurrences(state, addDays(getToday(state.settings.timezone), -30));
+          }, current.version);
           return json(clientData(result.state, result.version));
         }
 
@@ -222,6 +239,13 @@ export function createApi(env = {}) {
               const item = next[day] ?? next[index + 1] ?? { kind: "rest" };
               return [day, { kind: item.kind, blockId: item.blockId ?? null, cardioDesc: item.cardioDesc ?? null }];
             }));
+            const today = getToday(state.settings.timezone);
+            for (const date of Object.keys(state.occurrences)) {
+              if (date > today) {
+                const occurrence = makeOccurrence(date, state.weeklyPlan);
+                state.occurrences[date] = { ...occurrence, status: occurrence.kind === "rest" ? "rest" : "planned" };
+              }
+            }
           }, expectedVersion(body, request));
           return json(clientData(result.state, result.version));
         }
@@ -229,6 +253,18 @@ export function createApi(env = {}) {
         const blockMatch = path.match(/^blocks(?:\/([^/]+))?$/);
         if (blockMatch && method === "POST") {
           const result = await store.update((state) => {
+            if (blockMatch[1] && body.duplicate) {
+              const source = findById(state.blocks, blockMatch[1]);
+              if (!source) throw new Error("训练块不存在");
+              const block = { ...source, id: nextId("block", state.blocks), name: `${source.name}（副本）`, archived: false };
+              state.blocks.push(block);
+              const copiedExercises = [];
+              for (const exercise of state.exercises.filter((item) => item.blockId === source.id)) {
+                copiedExercises.push({ ...exercise, id: nextId("exercise", [...state.exercises, ...copiedExercises]), blockId: block.id, custom: true });
+              }
+              state.exercises.push(...copiedExercises);
+              return { block, exercises: copiedExercises };
+            }
             const block = {
               id: nextId("block", state.blocks),
               name: String(body.name || "新训练块"),
@@ -239,7 +275,7 @@ export function createApi(env = {}) {
             state.blocks.push(block);
             return block;
           }, expectedVersion(body, request));
-          return json({ block: result.result, version: result.version }, 201);
+          return json({ ...(blockMatch[1] && body.duplicate ? result.result : { block: result.result }), version: result.version }, 201);
         }
         if (blockMatch && blockMatch[1] && method === "PUT") {
           const result = await store.update((state) => {
@@ -302,13 +338,20 @@ export function createApi(env = {}) {
             const duplicate = body.clientRequestId && state.sessions.find((item) => item.clientRequestId === body.clientRequestId);
             if (duplicate) return duplicate;
             const plannedDate = String(body.plannedDate || getToday(state.settings.timezone));
+            const occurrence = getOccurrence(state, plannedDate);
+            if (occurrence.kind === "rest") {
+              const error = new Error("休息日不需要创建训练会话");
+              error.status = 400;
+              throw error;
+            }
+            state.occurrences[plannedDate] = state.occurrences[plannedDate] || { ...occurrence, status: "planned" };
             const existing = body.mode === "quick" && state.sessions.find((item) => item.plannedDate === plannedDate && item.quickCompleted);
             if (existing) return existing;
             const session = {
               id: nextId("session", state.sessions),
               plannedDate,
               actualDate: String(body.actualDate || plannedDate),
-              status: body.mode === "quick" ? "completed" : "in-progress",
+              status: body.status || (body.mode === "quick" ? "completed" : "in-progress"),
               quickCompleted: body.mode === "quick",
               notes: String(body.notes || ""),
               exerciseStates: body.exerciseStates || {},
@@ -339,10 +382,16 @@ export function createApi(env = {}) {
           const result = await store.update((state) => {
             const session = findById(state.sessions, body.sessionId);
             if (!session) throw new Error("训练会话不存在");
+            const duplicate = body.clientRequestId && state.records.find((item) => item.clientRequestId === body.clientRequestId);
+            if (duplicate) return duplicate;
+            const plannedExercise = findById(state.exercises, body.exerciseId);
+            const actualExercise = findById(state.exercises, body.actualExerciseId || body.exerciseId);
             const record = {
               id: nextId("record", state.records),
               sessionId: body.sessionId,
-              exerciseId: body.exerciseId,
+              exerciseId: actualExercise?.id || body.exerciseId,
+              plannedExerciseId: plannedExercise?.id || body.exerciseId,
+              exerciseName: actualExercise?.name || String(body.exerciseName || "有氧"),
               actualDate: body.actualDate || body.date || getToday(state.settings.timezone),
               setNumber: Number(body.setNumber || 1),
               weight: body.weight === "" || body.weight === undefined ? null : Number(body.weight),
@@ -353,11 +402,18 @@ export function createApi(env = {}) {
               quantity: body.quantity === "" || body.quantity === undefined ? null : Number(body.quantity),
               assistance: body.assistance === "" || body.assistance === undefined ? null : Number(body.assistance),
               notes: String(body.notes || ""),
+              clientRequestId: body.clientRequestId || null,
               createdAt: new Date().toISOString(),
               updatedAt: new Date().toISOString(),
             };
             state.records.push(record);
-            if (!session.quickCompleted && session.status === "in-progress") session.status = "partial";
+            if (!session.quickCompleted) {
+              session.exerciseStates = { ...session.exerciseStates, [body.exerciseId]: "completed" };
+              const occurrence = getOccurrence(state, session.plannedDate);
+              const required = occurrence.blockId ? state.exercises.filter((exercise) => exercise.blockId === occurrence.blockId && !exercise.archived) : [];
+              const completed = required.length > 0 && required.every((exercise) => session.exerciseStates[exercise.id] === "completed");
+              session.status = completed ? "completed" : "partial";
+            }
             session.updatedAt = new Date().toISOString();
             return record;
           }, expectedVersion(body, request));
@@ -407,19 +463,27 @@ export function createApi(env = {}) {
         }
 
         if (path === "export" && method === "GET") {
-          return json({ exportedAt: new Date().toISOString(), version: current.version, state: current.state });
+          const result = await store.update((state) => {
+            state.backup = { lastExportAt: new Date().toISOString() };
+          }, current.version);
+          return json({ exportedAt: result.state.backup.lastExportAt, version: result.version, state: result.state });
         }
 
         if (path === "import" && method === "POST") {
           const incoming = body.state ?? body;
           validateState(incoming);
+          if (body.replace && body.confirm !== "REPLACE") return json({ error: "覆盖导入需要输入 REPLACE 确认" }, 400);
           const result = await store.update((state) => body.replace ? Object.assign(state, { ...incoming, access: state.access }) : Object.assign(state, mergeStates(state, incoming)), current.version);
           return json(clientData(result.state, result.version));
         }
 
         if (path === "reset" && method === "POST") {
           if (body.confirm !== "RESET") return json({ error: "请输入 RESET 确认清空" }, 400);
-          const result = await store.update((state) => Object.assign(state, createEmptyState()), current.version);
+          if (String(body.backupVersion) !== String(current.version)) return json({ error: "请先导出当前版本备份，再清空数据" }, 400);
+          const result = await store.update((state) => {
+            const access = state.access;
+            Object.assign(state, createEmptyState(), { access: { ...access, authVersion: (access?.authVersion ?? 1) + 1 } });
+          }, current.version);
           return json(clientData(result.state, result.version));
         }
 

@@ -56,6 +56,7 @@ export function createEmptyState() {
   return {
     initialized: false,
     access: { overrideHash: null, overrideSalt: null, authVersion: 1 },
+    backup: { lastExportAt: null },
     settings: structuredClone(DEFAULT_SETTINGS),
     weeklyPlan: {},
     blocks: [],
@@ -107,6 +108,17 @@ export function getOccurrence(state, plannedDate) {
   };
 }
 
+export function materializeOccurrences(state, fromDate, days = 150) {
+  let date = fromDate;
+  for (let index = 0; index < days; index += 1) {
+    if (!state.occurrences[date]) {
+      const occurrence = makeOccurrence(date, state.weeklyPlan);
+      state.occurrences[date] = { ...occurrence, status: occurrence.kind === "rest" ? "rest" : "planned" };
+    }
+    date = addDays(date, 1);
+  }
+}
+
 export function listOccurrences(state, fromDate, days = 14) {
   const result = [];
   let date = fromDate;
@@ -122,6 +134,12 @@ export function listOccurrences(state, fromDate, days = 14) {
     date = addDays(date, 1);
   }
   return result;
+}
+
+export function startOfWeek(date, weekStartsOn = 1) {
+  const weekday = new Date(`${date}T00:00:00Z`).getUTCDay() || 7;
+  const offset = (weekday - Number(weekStartsOn) + 7) % 7;
+  return addDays(date, -offset);
 }
 
 export function addDays(date, amount) {
@@ -144,5 +162,6 @@ export function summarizeState(state) {
     ...state,
     blocks: state.blocks.filter((block) => !block.archived),
     exercises: state.exercises.filter((exercise) => !exercise.archived),
+    allExercises: state.exercises,
   };
 }

@@ -140,12 +140,12 @@ function renderToday() {
   if (occurrence.kind === "rest") {
     detail = `<div class="mt-7 rounded-xl border border-white/5 bg-white/[0.025] p-5"><p class="text-sm font-semibold text-white">今天不需要打卡</p><p class="mt-2 text-sm leading-6 text-slate-400">可以散步、拉伸，或者真正休息。休息日不会算作漏训。</p></div>`;
   } else if (occurrence.kind === "cardio") {
-    detail = `<div class="mt-7 rounded-xl border border-cyan-300/10 bg-cyan-300/[0.04] p-5"><p class="text-sm font-semibold text-white">${escapeHtml(occurrence.cardioDesc || "自由有氧")}</p><p class="mt-2 text-sm text-slate-400">可用详细记录填写时长、距离和备注。</p><div class="mt-4 flex flex-wrap items-end gap-2"><form class="cardio-form flex flex-wrap items-end gap-2" data-date="${occurrence.plannedDate}"><label class="field-label">分钟<input name="duration" class="compact-input mt-1" inputmode="numeric" placeholder="时长" /></label><label class="field-label">公里<input name="distance" class="compact-input mt-1" inputmode="decimal" placeholder="距离" /></label><button class="secondary-button" type="submit">记录有氧</button></form><button class="primary-button" data-quick="${occurrence.plannedDate}">${session?.status === "completed" ? "已完成" : "快速完成"} <span>→</span></button></div></div>`;
+    detail = `<div class="mt-7 rounded-xl border border-cyan-300/10 bg-cyan-300/[0.04] p-5"><p class="text-sm font-semibold text-white">${escapeHtml(occurrence.cardioDesc || "自由有氧")}</p><p class="mt-2 text-sm text-slate-400">可用详细记录填写时长、距离和备注。</p><div class="mt-4 flex flex-wrap items-end gap-2"><form class="cardio-form flex flex-wrap items-end gap-2" data-date="${occurrence.plannedDate}"><label class="field-label">分钟<input name="duration" class="compact-input mt-1" inputmode="numeric" placeholder="时长" /></label><label class="field-label">公里<input name="distance" class="compact-input mt-1" inputmode="decimal" placeholder="距离" /></label><button class="secondary-button" type="submit">记录有氧</button></form><button class="primary-button" data-quick="${occurrence.plannedDate}">${session?.status === "completed" ? "已完成" : "快速完成"} <span>→</span></button><button class="ghost-button" data-skip="${occurrence.plannedDate}">跳过</button><button class="ghost-button" data-reschedule="${occurrence.plannedDate}">调休</button></div></div>`;
   } else {
     detail = `<div class="mt-7 space-y-3">${exerciseList.map((exercise) => {
-      const records = app.data.records.filter((record) => record.exerciseId === exercise.id && record.sessionId === session?.id);
-      return `<article class="exercise-row"><div class="flex flex-wrap items-start justify-between gap-3"><div><p class="text-sm font-semibold text-white">${escapeHtml(exercise.name)}</p><p class="mt-1 text-xs text-slate-500">${escapeHtml(exercise.targetPart || "全身")} · ${escapeHtml(exercise.sets || "—")} 组 × ${escapeHtml(exercise.reps || "自定")}</p></div><span class="soft-chip">${escapeHtml(exercise.note || "按状态调整")}</span></div><div class="mt-4 flex flex-wrap items-end gap-2"><form class="record-form flex flex-wrap items-end gap-2" data-exercise-id="${exercise.id}" data-date="${occurrence.plannedDate}"><label class="field-label">重量<input name="weight" class="compact-input mt-1" inputmode="decimal" placeholder="kg" /></label><label class="field-label">次数<input name="reps" class="compact-input mt-1" inputmode="numeric" placeholder="次数" /></label><label class="field-label">秒数<input name="duration" class="compact-input mt-1" inputmode="numeric" placeholder="时长" /></label><button class="secondary-button" type="submit">记一组</button></form></div>${records.length ? `<p class="mt-3 text-xs text-cyan-200">已记录：${records.map((record) => [record.weight ? `${record.weight}${record.unit}` : "", record.reps ? `${record.reps} 次` : "", record.duration ? `${record.duration} 秒` : ""].filter(Boolean).join(" × ")).join(" · ")}</p>` : ""}</article>`;
-    }).join("")}<div class="flex flex-wrap gap-3 pt-2"><button class="primary-button" data-quick="${occurrence.plannedDate}">${session?.status === "completed" ? "已完成训练" : "快速完成训练"} <span>→</span></button>${session ? `<button class="secondary-button" data-partial="${session.id}">标记部分完成</button>` : ""}</div></div>`;
+      const records = app.data.records.filter((record) => (record.exerciseId === exercise.id || record.plannedExerciseId === exercise.id) && record.sessionId === session?.id);
+      return `<article class="exercise-row"><div class="flex flex-wrap items-start justify-between gap-3"><div><p class="text-sm font-semibold text-white">${escapeHtml(exercise.name)}</p><p class="mt-1 text-xs text-slate-500">${escapeHtml(exercise.targetPart || "全身")} · ${escapeHtml(exercise.sets || "—")} 组 × ${escapeHtml(exercise.reps || "自定")}</p></div><span class="soft-chip">${escapeHtml(exercise.note || "按状态调整")}</span></div><div class="mt-4 flex flex-wrap items-end gap-2"><form class="record-form flex flex-wrap items-end gap-2" data-exercise-id="${exercise.id}" data-date="${occurrence.plannedDate}"><label class="field-label">实际动作<select name="actualExerciseId" class="compact-input mt-1">${exerciseList.map((candidate) => `<option value="${candidate.id}" ${candidate.id === exercise.id ? "selected" : ""}>${escapeHtml(candidate.name)}</option>`).join("")}</select></label><label class="field-label">重量<input name="weight" class="compact-input mt-1" inputmode="decimal" placeholder="kg" /></label><label class="field-label">次数<input name="reps" class="compact-input mt-1" inputmode="numeric" placeholder="次数" /></label><label class="field-label">秒数<input name="duration" class="compact-input mt-1" inputmode="numeric" placeholder="时长" /></label><button class="secondary-button" type="submit">记一组</button></form></div>${records.length ? `<p class="mt-3 text-xs text-cyan-200">已记录：${records.map((record) => [record.weight ? `${record.weight}${record.unit}` : "", record.reps ? `${record.reps} 次` : "", record.duration ? `${record.duration} 秒` : ""].filter(Boolean).join(" × ")).join(" · ")}</p>` : ""}</article>`;
+    }).join("")}<div class="flex flex-wrap gap-3 pt-2"><button class="primary-button" data-quick="${occurrence.plannedDate}">${session?.status === "completed" ? "已完成训练" : "快速完成训练"} <span>→</span></button>${session ? `<button class="secondary-button" data-partial="${session.id}">标记部分完成</button>` : ""}<button class="ghost-button" data-skip="${occurrence.plannedDate}">跳过</button><button class="ghost-button" data-reschedule="${occurrence.plannedDate}">调休</button></div></div>`;
   }
   $("#today-card").innerHTML = `<div class="border-b border-white/5 p-5 sm:p-7"><div class="flex flex-wrap items-start justify-between gap-4"><div><p class="section-kicker">TODAY'S WORKOUT</p><h2 class="mt-2 text-2xl font-semibold text-white">${escapeHtml(occurrence.kind === "block" ? block?.name || "训练" : occurrence.kind === "cardio" ? "有氧日" : "恢复日")}</h2><p class="mt-2 text-sm text-slate-400">${escapeHtml(formatDate(occurrence.plannedDate))} · ${escapeHtml(occurrence.kind === "block" ? block?.description || "" : occurrence.cardioDesc || "")}</p></div><span class="${statusClass(session?.status || occurrence.status)}">${stateText}</span></div>${session?.actualDate && session.actualDate !== session.plannedDate ? `<p class="mt-4 text-xs text-amber-200">实际训练日期：${escapeHtml(formatDate(session.actualDate))}</p>` : ""}</div><div class="p-5 sm:p-7">${detail}</div>`;
   $("#date-label").textContent = formatDate(app.activeDate).toUpperCase();
@@ -165,6 +165,7 @@ function renderSettings() {
     const item = plan[day] || plan[String(day)] || { kind: "rest", blockId: null, cardioDesc: "" };
     return `<div class="grid gap-3 rounded-xl border border-white/5 bg-white/[0.025] p-3 sm:grid-cols-[72px_150px_1fr]"><div class="self-center text-sm font-semibold text-slate-400">Day ${day}</div><select name="day-${day}-kind" class="field-input mt-0"><option value="block" ${item.kind === "block" ? "selected" : ""}>训练块</option><option value="cardio" ${item.kind === "cardio" ? "selected" : ""}>有氧</option><option value="rest" ${item.kind === "rest" ? "selected" : ""}>休息</option></select><div class="grid gap-2 sm:grid-cols-2"><select name="day-${day}-block" class="field-input mt-0"><option value="">选择训练块</option>${app.data.blocks.map((block) => `<option value="${block.id}" ${item.blockId === block.id ? "selected" : ""}>${escapeHtml(block.name)}</option>`).join("")}</select><input name="day-${day}-cardio" class="field-input mt-0" value="${escapeHtml(item.cardioDesc || "")}" placeholder="有氧描述或恢复建议" /></div></div>`;
   }).join("");
+  $("#block-list").innerHTML = app.data.blocks.length ? app.data.blocks.map((block) => `<div class="flex items-center justify-between gap-3 rounded-xl border border-white/5 bg-white/[0.025] p-3"><div class="min-w-0"><p class="truncate text-sm font-semibold text-white">${escapeHtml(block.name)}</p><p class="mt-1 text-xs text-slate-500">${escapeHtml(block.description || "无说明")} · ${exercisesFor(block.id).length} 个动作</p></div><button class="ghost-button" data-duplicate-block="${block.id}" type="button">复制</button></div>`).join("") : `<div class="col-span-full rounded-xl border border-dashed border-white/10 p-8 text-center text-sm text-slate-500">还没有训练块。</div>`;
   $("#exercise-block-select").innerHTML = `<option value="">不归属训练块</option>${app.data.blocks.map((block) => `<option value="${block.id}">${escapeHtml(block.name)}</option>`).join("")}`;
   $("#exercise-list").innerHTML = app.data.exercises.length ? app.data.exercises.map((exercise) => { const block = blockFor(exercise.blockId); return `<div class="flex items-center justify-between gap-3 rounded-xl border border-white/5 bg-white/[0.025] p-3"><div class="min-w-0"><p class="truncate text-sm font-semibold text-white">${escapeHtml(exercise.name)}</p><p class="mt-1 text-xs text-slate-500">${escapeHtml(block?.name || "未归类")} · ${escapeHtml(exercise.targetPart || "全身")} · ${escapeHtml(exercise.sets || "—")} × ${escapeHtml(exercise.reps || "自定")}</p></div><div class="flex shrink-0 gap-1"><button class="ghost-button" data-edit-exercise="${exercise.id}" type="button">编辑</button><button class="ghost-button text-rose-300" data-archive-exercise="${exercise.id}" type="button">归档</button></div></div>`; }).join("") : `<div class="col-span-full rounded-xl border border-dashed border-white/10 p-8 text-center text-sm text-slate-500">还没有动作。</div>`;
 }
@@ -175,8 +176,9 @@ async function refreshHistory() {
   const to = $("#history-to").value || app.data.today;
   const history = await request(`history?from=${from}&to=${to}`);
   const stats = history.adherence;
-  $("#history-summary").innerHTML = [["执行率", `${stats.percentage}%`, "completed / planned"], ["完成训练", stats.completed, "训练日"], ["部分完成", stats.partial, "需要调整"], ["训练记录", history.records.length, "组级数据"]].map(([label, value, note]) => `<div class="metric-card"><p class="section-kicker">${label}</p><p class="mt-3 text-3xl font-semibold text-white">${value}</p><p class="mt-1 text-xs text-slate-500">${note}</p></div>`).join("");
-  $("#history-list").innerHTML = history.records.length ? history.records.slice().reverse().map((record) => { const exercise = app.data.exercises.find((item) => item.id === record.exerciseId); return `<div class="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-white/5 bg-white/[0.025] p-4"><div><p class="text-sm font-semibold text-white">${escapeHtml(exercise?.name || "已归档动作")}</p><p class="mt-1 text-xs text-slate-500">${escapeHtml(record.actualDate)} · 第 ${record.setNumber} 组</p></div><p class="text-sm text-cyan-100">${escapeHtml([record.weight ? `${record.weight}${record.unit}` : "", record.reps ? `${record.reps} 次` : "", record.duration ? `${record.duration} 秒` : "", record.distance ? `${record.distance} km` : ""].filter(Boolean).join(" × ") || "仅记录完成")}</p></div>`; }).join("") : `<div class="rounded-xl border border-dashed border-white/10 p-8 text-center text-sm text-slate-500">这个时间范围还没有详细训练记录。</div>`;
+  $("#history-summary").innerHTML = [["执行率", `${stats.percentage}%`, "completed / planned"], ["完成训练", stats.completed, "训练日"], ["部分完成", stats.partial, "需要调整"], ["训练频率", history.frequency, "实际训练日"]].map(([label, value, note]) => `<div class="metric-card"><p class="section-kicker">${label}</p><p class="mt-3 text-3xl font-semibold text-white">${value}</p><p class="mt-1 text-xs text-slate-500">${note}</p></div>`).join("");
+  $("#history-trends").innerHTML = history.trends?.length ? history.trends.map((trend) => `<div class="rounded-xl border border-white/5 bg-white/[0.025] p-4"><div class="flex items-center justify-between gap-3"><p class="text-sm font-semibold text-white">${escapeHtml(trend.name)}</p><span class="text-xs text-slate-500">${trend.count} 组</span></div><div class="mt-4 h-2 overflow-hidden rounded-full bg-white/5"><div class="h-full rounded-full bg-gradient-to-r from-cyan-300 to-lime-300" style="width:${Math.min(100, Math.max(8, trend.count * 12))}%"></div></div></div>`).join("") : "";
+  $("#history-list").innerHTML = history.records.length ? history.records.slice().reverse().map((record) => { const exercise = (app.data.allExercises || app.data.exercises).find((item) => item.id === record.exerciseId); return `<div class="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-white/5 bg-white/[0.025] p-4"><div><p class="text-sm font-semibold text-white">${escapeHtml(exercise?.name || record.exerciseName || "已归档动作")}</p><p class="mt-1 text-xs text-slate-500">${escapeHtml(record.actualDate)} · 第 ${record.setNumber} 组</p></div><p class="text-sm text-cyan-100">${escapeHtml([record.weight ? `${record.weight}${record.unit}` : "", record.reps ? `${record.reps} 次` : "", record.duration ? `${record.duration} 秒` : "", record.distance ? `${record.distance} km` : ""].filter(Boolean).join(" × ") || "仅记录完成")}</p></div>`; }).join("") : `<div class="rounded-xl border border-dashed border-white/10 p-8 text-center text-sm text-slate-500">这个时间范围还没有详细训练记录。</div>`;
 }
 
 function switchView(view) {
@@ -196,13 +198,26 @@ async function quickComplete(date) {
   try { await request("sessions", { method: "POST", body: { plannedDate: date, actualDate: date, mode: "quick", clientRequestId: `quick:${date}` } }); await loadBootstrap(date); showToast("训练已记录"); } catch (error) { showToast(error.message, "error"); }
 }
 
+async function skipWorkout(date) {
+  try { await request("sessions", { method: "POST", body: { plannedDate: date, actualDate: date, mode: "detail", status: "skipped", clientRequestId: `skip:${date}` } }); await loadBootstrap(date); showToast("已记录跳过"); } catch (error) { showToast(error.message, "error"); }
+}
+
+async function rescheduleWorkout(date) {
+  const actualDate = window.prompt("调整到哪一天？请使用 YYYY-MM-DD", date);
+  if (!actualDate || actualDate === date) return;
+  try { await request("sessions", { method: "POST", body: { plannedDate: date, actualDate, mode: "detail", status: "rescheduled", clientRequestId: `reschedule:${date}:${actualDate}` } }); await loadBootstrap(date); showToast(`已调整到 ${actualDate}`); } catch (error) { showToast(error.message, "error"); }
+}
+
 async function submitRecord(form) {
   try {
     const date = form.dataset.date;
     let session = sessionFor(date);
     if (!session) { const response = await request("sessions", { method: "POST", body: { plannedDate: date, actualDate: date, mode: "detail", clientRequestId: `detail:${date}` } }); session = response.session; }
     const values = Object.fromEntries(new FormData(form).entries());
-    await request("records", { method: "POST", body: { ...values, sessionId: session.id, exerciseId: form.dataset.exerciseId || "cardio", actualDate: date, setNumber: app.data.records.filter((record) => record.sessionId === session.id && record.exerciseId === (form.dataset.exerciseId || "cardio")).length + 1 } });
+    const plannedExerciseId = form.dataset.exerciseId || "cardio";
+    const actualExerciseId = values.actualExerciseId || plannedExerciseId;
+    const setNumber = app.data.records.filter((record) => record.sessionId === session.id && (record.exerciseId === actualExerciseId || record.plannedExerciseId === plannedExerciseId)).length + 1;
+    await request("records", { method: "POST", body: { ...values, sessionId: session.id, exerciseId: plannedExerciseId, actualExerciseId, actualDate: date, setNumber, clientRequestId: `record:${session.id}:${plannedExerciseId}:${setNumber}:${actualExerciseId}` } });
     await loadBootstrap(date); showToast("已记录一组");
   } catch (error) { showToast(error.message, "error"); }
 }
@@ -237,6 +252,10 @@ async function addExercise(form) {
   try { await request("exercises", { method: "POST", body: Object.fromEntries(new FormData(form).entries()) }); form.reset(); await loadBootstrap(); showToast("动作已添加"); } catch (error) { showToast(error.message, "error"); }
 }
 
+async function duplicateBlock(id) {
+  try { await request(`blocks/${id}`, { method: "POST", body: { duplicate: true } }); await loadBootstrap(); showToast("训练块副本已创建"); } catch (error) { showToast(error.message, "error"); }
+}
+
 async function editExercise(id) {
   const exercise = app.data.exercises.find((item) => item.id === id);
   if (!exercise) return;
@@ -263,9 +282,9 @@ function download(filename, content, type) {
   const link = document.createElement("a"); link.href = url; link.download = filename; link.click(); URL.revokeObjectURL(url);
 }
 
-async function exportJson() { try { const data = await request("export"); download(`fitness-backup-${app.data.today}.json`, JSON.stringify(data, null, 2), "application/json"); } catch (error) { showToast(error.message, "error"); } }
+async function exportJson() { try { const data = await request("export"); app.data.version = data.version; app.data.backup = data.state.backup; app.lastBackupVersion = data.version; download(`fitness-backup-${app.data.today}.json`, JSON.stringify(data, null, 2), "application/json"); showToast("JSON 备份已导出"); } catch (error) { showToast(error.message, "error"); } }
 
-async function exportCsv() { try { const data = await request("export"); const rows = [["date", "exercise", "weight", "unit", "reps", "duration", "distance", "notes"]]; for (const record of data.state.records) { const exercise = data.state.exercises.find((item) => item.id === record.exerciseId); rows.push([record.actualDate, exercise?.name || "", record.weight ?? "", record.unit || "", record.reps ?? "", record.duration ?? "", record.distance ?? "", record.notes || ""]); } download(`fitness-history-${app.data.today}.csv`, rows.map((row) => row.map((value) => `"${String(value).replaceAll('"', '""')}"`).join(",")).join("\n"), "text/csv;charset=utf-8"); } catch (error) { showToast(error.message, "error"); } }
+async function exportCsv() { try { const data = await request("export"); app.data.version = data.version; app.data.backup = data.state.backup; app.lastBackupVersion = data.version; const rows = [["date", "exercise", "weight", "unit", "reps", "duration", "distance", "notes"]]; for (const record of data.state.records) { const exercise = data.state.exercises.find((item) => item.id === record.exerciseId); rows.push([record.actualDate, exercise?.name || record.exerciseName || "", record.weight ?? "", record.unit || "", record.reps ?? "", record.duration ?? "", record.distance ?? "", record.notes || ""]); } download(`fitness-history-${app.data.today}.csv`, rows.map((row) => row.map((value) => `"${String(value).replaceAll('"', '""')}"`).join(",")).join("\n"), "text/csv;charset=utf-8"); showToast("CSV 已导出"); } catch (error) { showToast(error.message, "error"); } }
 
 document.addEventListener("submit", async (event) => {
   const form = event.target;
@@ -287,17 +306,20 @@ document.addEventListener("click", async (event) => {
   if (target.dataset.initialize) { await initialize(target.dataset.initialize); return; }
   if (target.dataset.day) { app.activeDate = target.dataset.day; renderToday(); return; }
   if (target.dataset.quick) { await quickComplete(target.dataset.quick); return; }
+  if (target.dataset.skip) { await skipWorkout(target.dataset.skip); return; }
+  if (target.dataset.reschedule) { await rescheduleWorkout(target.dataset.reschedule); return; }
   if (target.dataset.partial) { await markPartial(target.dataset.partial); return; }
   if (target.dataset.goalToggle) { await toggleGoal(target.dataset.goalToggle); return; }
   if (target.dataset.editExercise) { await editExercise(target.dataset.editExercise); return; }
   if (target.dataset.archiveExercise) { await archiveExercise(target.dataset.archiveExercise); return; }
+  if (target.dataset.duplicateBlock) { await duplicateBlock(target.dataset.duplicateBlock); return; }
   if (target.id === "logout-button") { await request("auth", { method: "DELETE" }).catch(() => {}); showAuth(); return; }
   if (target.id === "history-refresh") { await refreshHistory().catch((error) => showToast(error.message, "error")); return; }
   if (target.id === "save-plan") { await savePlan(); return; }
   if (target.id === "undo-plan") { await undoPlan(); return; }
   if (target.id === "export-json") { await exportJson(); return; }
   if (target.id === "export-csv") { await exportCsv(); return; }
-  if (target.id === "reset-data") { if (window.confirm("确定清空全部数据吗？建议先导出 JSON 备份。")) { const confirmation = window.prompt("请输入 RESET 确认"); try { app.data = await request("reset", { method: "POST", body: { confirm: confirmation } }); render(); showToast("数据已清空"); } catch (error) { showToast(error.message, "error"); } } }
+  if (target.id === "reset-data") { if (window.confirm("确定清空全部数据吗？请先导出 JSON 备份。")) { const confirmation = window.prompt("请输入 RESET 确认"); try { app.data = await request("reset", { method: "POST", body: { confirm: confirmation, backupVersion: app.lastBackupVersion || app.data.version } }); render(); showToast("数据已清空"); } catch (error) { showToast(error.message, "error"); } } }
 });
 
 $("#import-json").addEventListener("change", async (event) => {
