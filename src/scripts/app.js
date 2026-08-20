@@ -110,6 +110,7 @@ function render() {
   renderPlan();
   renderGoals();
   renderSettings();
+  renderHistoryFilters();
   if (app.view === "history") refreshHistory();
 }
 
@@ -167,14 +168,20 @@ function renderSettings() {
   }).join("");
   $("#block-list").innerHTML = app.data.blocks.length ? app.data.blocks.map((block) => `<div class="flex items-center justify-between gap-3 rounded-xl border border-white/5 bg-white/[0.025] p-3"><div class="min-w-0"><p class="truncate text-sm font-semibold text-white">${escapeHtml(block.name)}</p><p class="mt-1 text-xs text-slate-500">${escapeHtml(block.description || "无说明")} · ${exercisesFor(block.id).length} 个动作</p></div><button class="ghost-button" data-duplicate-block="${block.id}" type="button">复制</button></div>`).join("") : `<div class="col-span-full rounded-xl border border-dashed border-white/10 p-8 text-center text-sm text-slate-500">还没有训练块。</div>`;
   $("#exercise-block-select").innerHTML = `<option value="">不归属训练块</option>${app.data.blocks.map((block) => `<option value="${block.id}">${escapeHtml(block.name)}</option>`).join("")}`;
-  $("#exercise-list").innerHTML = app.data.exercises.length ? app.data.exercises.map((exercise) => { const block = blockFor(exercise.blockId); return `<div class="flex items-center justify-between gap-3 rounded-xl border border-white/5 bg-white/[0.025] p-3"><div class="min-w-0"><p class="truncate text-sm font-semibold text-white">${escapeHtml(exercise.name)}</p><p class="mt-1 text-xs text-slate-500">${escapeHtml(block?.name || "未归类")} · ${escapeHtml(exercise.targetPart || "全身")} · ${escapeHtml(exercise.sets || "—")} × ${escapeHtml(exercise.reps || "自定")}</p></div><div class="flex shrink-0 gap-1"><button class="ghost-button" data-edit-exercise="${exercise.id}" type="button">编辑</button><button class="ghost-button text-rose-300" data-archive-exercise="${exercise.id}" type="button">归档</button></div></div>`; }).join("") : `<div class="col-span-full rounded-xl border border-dashed border-white/10 p-8 text-center text-sm text-slate-500">还没有动作。</div>`;
+  $("#exercise-list").innerHTML = app.data.exercises.length ? app.data.exercises.map((exercise) => { const block = blockFor(exercise.blockId); const siblings = app.data.exercises.filter((item) => item.blockId === exercise.blockId).sort((left, right) => left.sortOrder - right.sortOrder); const index = siblings.findIndex((item) => item.id === exercise.id); return `<div class="flex items-center justify-between gap-3 rounded-xl border border-white/5 bg-white/[0.025] p-3"><div class="min-w-0"><p class="truncate text-sm font-semibold text-white">${escapeHtml(exercise.name)}</p><p class="mt-1 text-xs text-slate-500">${escapeHtml(block?.name || "未归类")} · ${escapeHtml(exercise.targetPart || "全身")} · ${escapeHtml(exercise.sets || "—")} × ${escapeHtml(exercise.reps || "自定")}</p></div><div class="flex shrink-0 gap-1"><button class="ghost-button" data-move-exercise="${exercise.id}" data-direction="up" ${index === 0 ? "disabled" : ""} type="button">↑</button><button class="ghost-button" data-move-exercise="${exercise.id}" data-direction="down" ${index === siblings.length - 1 ? "disabled" : ""} type="button">↓</button><button class="ghost-button" data-edit-exercise="${exercise.id}" type="button">编辑</button><button class="ghost-button text-rose-300" data-archive-exercise="${exercise.id}" type="button">归档</button></div></div>`; }).join("") : `<div class="col-span-full rounded-xl border border-dashed border-white/10 p-8 text-center text-sm text-slate-500">还没有动作。</div>`;
+}
+
+function renderHistoryFilters() {
+  $("#history-exercise").innerHTML = `<option value="">全部动作</option>${(app.data.allExercises || app.data.exercises).map((exercise) => `<option value="${exercise.id}">${escapeHtml(exercise.name)}</option>`).join("")}`;
 }
 
 async function refreshHistory() {
   if (!app.data?.initialized) return;
   const from = $("#history-from").value || addDays(app.data.today, -30);
   const to = $("#history-to").value || app.data.today;
-  const history = await request(`history?from=${from}&to=${to}`);
+  const exercise = $("#history-exercise").value;
+  const kind = $("#history-kind").value;
+  const history = await request(`history?from=${from}&to=${to}&exercise=${encodeURIComponent(exercise)}&kind=${encodeURIComponent(kind)}`);
   const stats = history.adherence;
   $("#history-summary").innerHTML = [["执行率", `${stats.percentage}%`, "completed / planned"], ["完成训练", stats.completed, "训练日"], ["部分完成", stats.partial, "需要调整"], ["训练频率", history.frequency, "实际训练日"]].map(([label, value, note]) => `<div class="metric-card"><p class="section-kicker">${label}</p><p class="mt-3 text-3xl font-semibold text-white">${value}</p><p class="mt-1 text-xs text-slate-500">${note}</p></div>`).join("");
   $("#history-trends").innerHTML = history.trends?.length ? history.trends.map((trend) => `<div class="rounded-xl border border-white/5 bg-white/[0.025] p-4"><div class="flex items-center justify-between gap-3"><p class="text-sm font-semibold text-white">${escapeHtml(trend.name)}</p><span class="text-xs text-slate-500">${trend.count} 组</span></div><div class="mt-4 h-2 overflow-hidden rounded-full bg-white/5"><div class="h-full rounded-full bg-gradient-to-r from-cyan-300 to-lime-300" style="width:${Math.min(100, Math.max(8, trend.count * 12))}%"></div></div></div>`).join("") : "";
@@ -260,8 +267,21 @@ async function editExercise(id) {
   const exercise = app.data.exercises.find((item) => item.id === id);
   if (!exercise) return;
   const name = window.prompt("动作名称", exercise.name);
-  if (!name || name === exercise.name) return;
-  try { await request(`exercises/${id}`, { method: "PUT", body: { name } }); await loadBootstrap(); showToast("动作已更新"); } catch (error) { showToast(error.message, "error"); }
+  if (!name) return;
+  const targetPart = window.prompt("目标部位", exercise.targetPart || "");
+  const sets = window.prompt("组数", exercise.sets || "");
+  const reps = window.prompt("次数/时长", exercise.reps || "");
+  try { await request(`exercises/${id}`, { method: "PUT", body: { name, targetPart, sets: sets ? Number(sets) : null, reps } }); await loadBootstrap(); showToast("动作已更新"); } catch (error) { showToast(error.message, "error"); }
+}
+
+async function moveExercise(id, direction) {
+  const exercise = app.data.exercises.find((item) => item.id === id);
+  if (!exercise) return;
+  const siblings = app.data.exercises.filter((item) => item.blockId === exercise.blockId).sort((left, right) => left.sortOrder - right.sortOrder);
+  const index = siblings.findIndex((item) => item.id === id);
+  const other = siblings[index + (direction === "up" ? -1 : 1)];
+  if (!other) return;
+  try { await request("exercises/reorder", { method: "POST", body: { firstId: exercise.id, secondId: other.id, expectedVersion: app.data.version } }); await loadBootstrap(); showToast("动作顺序已更新"); } catch (error) { showToast(error.message, "error"); }
 }
 
 async function archiveExercise(id) {
@@ -348,6 +368,7 @@ document.addEventListener("click", async (event) => {
   if (target.dataset.deleteRecord) { await deleteRecord(target.dataset.deleteRecord); return; }
   if (target.dataset.editExercise) { await editExercise(target.dataset.editExercise); return; }
   if (target.dataset.archiveExercise) { await archiveExercise(target.dataset.archiveExercise); return; }
+  if (target.dataset.moveExercise) { await moveExercise(target.dataset.moveExercise, target.dataset.direction); return; }
   if (target.dataset.duplicateBlock) { await duplicateBlock(target.dataset.duplicateBlock); return; }
   if (target.id === "logout-button") { await request("auth", { method: "DELETE" }).catch(() => {}); showAuth(); return; }
   if (target.id === "history-refresh") { await refreshHistory().catch((error) => showToast(error.message, "error")); return; }

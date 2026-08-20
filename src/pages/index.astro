@@ -97,7 +97,7 @@ import "../styles/global.css";
           <div class="glass-panel p-5 sm:p-7">
             <div class="flex flex-wrap items-end justify-between gap-4">
               <div><p class="section-kicker">PERFORMANCE</p><h2 class="mt-2 text-xl font-semibold text-white">最近训练记录</h2></div>
-              <div class="flex gap-2"><input id="history-from" type="date" class="compact-input" /><input id="history-to" type="date" class="compact-input" /><button id="history-refresh" class="secondary-button" type="button">筛选</button></div>
+              <div class="flex flex-wrap gap-2"><input id="history-from" type="date" class="compact-input" /><input id="history-to" type="date" class="compact-input" /><select id="history-exercise" class="compact-input"><option value="">全部动作</option></select><select id="history-kind" class="compact-input"><option value="">全部类型</option><option value="block">训练块</option><option value="cardio">有氧</option></select><button id="history-refresh" class="secondary-button" type="button">筛选</button></div>
             </div>
             <div id="history-trends" class="mt-6 grid gap-3 sm:grid-cols-2"></div>
             <div id="history-list" class="mt-6 space-y-3"></div>

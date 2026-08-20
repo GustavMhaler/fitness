@@ -141,11 +141,15 @@ function recalculateSession(state, session) {
   session.status = required.length > 0 && required.every((exercise) => performed.has(exercise.id)) ? "completed" : performed.size > 0 ? "partial" : "in-progress";
 }
 
-function collectHistory(state, from, to, exerciseId) {
+function collectHistory(state, from, to, exerciseId, kind) {
   const records = state.records.filter((record) => {
     if (exerciseId && record.exerciseId !== exerciseId) return false;
     if (from && record.actualDate < from) return false;
     if (to && record.actualDate > to) return false;
+    if (kind) {
+      const session = findById(state.sessions, record.sessionId);
+      if (getOccurrence(state, session?.plannedDate || record.actualDate).kind !== kind) return false;
+    }
     return true;
   });
   const occurrenceDates = [];
@@ -159,7 +163,7 @@ function collectHistory(state, from, to, exerciseId) {
     const occurrence = getOccurrence(state, date);
     const session = state.sessions.find((item) => item.plannedDate === date);
     return { ...occurrence, status: session?.rescheduled ? "rescheduled" : session?.status ?? occurrence.status };
-  });
+  }).filter((occurrence) => !kind || occurrence.kind === kind);
   const trendCounts = new Map();
   for (const record of records) trendCounts.set(record.exerciseId, (trendCounts.get(record.exerciseId) || 0) + 1);
   const trends = [...trendCounts.entries()].map(([id, count]) => ({
@@ -321,6 +325,15 @@ export function createApi(env = {}) {
         }
 
         const exerciseMatch = path.match(/^exercises(?:\/([^/]+))?$/);
+        if (path === "exercises/reorder" && method === "POST") {
+          const result = await store.update((state) => {
+            const first = findById(state.exercises, body.firstId);
+            const second = findById(state.exercises, body.secondId);
+            if (!first || !second || first.blockId !== second.blockId) throw new Error("动作排序目标无效");
+            [first.sortOrder, second.sortOrder] = [second.sortOrder, first.sortOrder];
+          }, expectedVersion(body, request));
+          return json({ ok: true, version: result.version });
+        }
         if (exerciseMatch && method === "POST") {
           const result = await store.update((state) => {
             const exercise = {
@@ -488,7 +501,7 @@ export function createApi(env = {}) {
         }
 
         if (path === "history" && method === "GET") {
-          const history = collectHistory(current.state, url.searchParams.get("from"), url.searchParams.get("to"), url.searchParams.get("exercise"));
+          const history = collectHistory(current.state, url.searchParams.get("from"), url.searchParams.get("to"), url.searchParams.get("exercise"), url.searchParams.get("kind"));
           return json({ ...history, version: current.version });
         }
 
