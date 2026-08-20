@@ -152,7 +152,7 @@ function renderToday() {
 }
 
 function renderGoals() {
-  $("#goal-list").innerHTML = app.data.goals.length ? app.data.goals.map((goal) => `<div class="flex items-center justify-between gap-4 rounded-xl border border-white/5 bg-white/[0.025] p-4"><div class="flex min-w-0 items-center gap-3"><button class="grid h-7 w-7 shrink-0 place-items-center rounded-full border ${goal.achieved ? "border-lime-300 bg-lime-300 text-slate-950" : "border-slate-600 text-transparent"}" data-goal-toggle="${goal.id}" aria-label="标记目标">✓</button><div class="min-w-0"><p class="truncate text-sm ${goal.achieved ? "text-slate-500 line-through" : "text-white"}">${escapeHtml(goal.text)}</p>${goal.deadline ? `<p class="mt-1 text-xs text-slate-500">截止 ${escapeHtml(goal.deadline)}</p>` : ""}</div></div><span class="status-pill ${goal.achieved ? "status-completed" : "status-planned"}">${goal.achieved ? "已达成" : "进行中"}</span></div>`).join("") : `<div class="rounded-xl border border-dashed border-white/10 p-8 text-center text-sm text-slate-500">还没有目标，先写下一个具体的小目标。</div>`;
+  $("#goal-list").innerHTML = app.data.goals.length ? app.data.goals.map((goal) => `<div class="flex items-center justify-between gap-4 rounded-xl border border-white/5 bg-white/[0.025] p-4"><div class="flex min-w-0 items-center gap-3"><button class="grid h-7 w-7 shrink-0 place-items-center rounded-full border ${goal.achieved ? "border-lime-300 bg-lime-300 text-slate-950" : "border-slate-600 text-transparent"}" data-goal-toggle="${goal.id}" aria-label="标记目标">✓</button><div class="min-w-0"><p class="truncate text-sm ${goal.achieved ? "text-slate-500 line-through" : "text-white"}">${escapeHtml(goal.text)}</p>${goal.deadline ? `<p class="mt-1 text-xs text-slate-500">截止 ${escapeHtml(goal.deadline)}</p>` : ""}</div></div><div class="flex items-center gap-2"><button class="ghost-button" data-edit-goal="${goal.id}" type="button">编辑</button><span class="status-pill ${goal.achieved ? "status-completed" : "status-planned"}">${goal.achieved ? "已达成" : "进行中"}</span></div></div>`).join("") : `<div class="rounded-xl border border-dashed border-white/10 p-8 text-center text-sm text-slate-500">还没有目标，先写下一个具体的小目标。</div>`;
 }
 
 function renderSettings() {
@@ -178,7 +178,7 @@ async function refreshHistory() {
   const stats = history.adherence;
   $("#history-summary").innerHTML = [["执行率", `${stats.percentage}%`, "completed / planned"], ["完成训练", stats.completed, "训练日"], ["部分完成", stats.partial, "需要调整"], ["训练频率", history.frequency, "实际训练日"]].map(([label, value, note]) => `<div class="metric-card"><p class="section-kicker">${label}</p><p class="mt-3 text-3xl font-semibold text-white">${value}</p><p class="mt-1 text-xs text-slate-500">${note}</p></div>`).join("");
   $("#history-trends").innerHTML = history.trends?.length ? history.trends.map((trend) => `<div class="rounded-xl border border-white/5 bg-white/[0.025] p-4"><div class="flex items-center justify-between gap-3"><p class="text-sm font-semibold text-white">${escapeHtml(trend.name)}</p><span class="text-xs text-slate-500">${trend.count} 组</span></div><div class="mt-4 h-2 overflow-hidden rounded-full bg-white/5"><div class="h-full rounded-full bg-gradient-to-r from-cyan-300 to-lime-300" style="width:${Math.min(100, Math.max(8, trend.count * 12))}%"></div></div></div>`).join("") : "";
-  $("#history-list").innerHTML = history.records.length ? history.records.slice().reverse().map((record) => { const exercise = (app.data.allExercises || app.data.exercises).find((item) => item.id === record.exerciseId); return `<div class="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-white/5 bg-white/[0.025] p-4"><div><p class="text-sm font-semibold text-white">${escapeHtml(exercise?.name || record.exerciseName || "已归档动作")}</p><p class="mt-1 text-xs text-slate-500">${escapeHtml(record.actualDate)} · 第 ${record.setNumber} 组</p></div><p class="text-sm text-cyan-100">${escapeHtml([record.weight ? `${record.weight}${record.unit}` : "", record.reps ? `${record.reps} 次` : "", record.duration ? `${record.duration} 秒` : "", record.distance ? `${record.distance} km` : ""].filter(Boolean).join(" × ") || "仅记录完成")}</p></div>`; }).join("") : `<div class="rounded-xl border border-dashed border-white/10 p-8 text-center text-sm text-slate-500">这个时间范围还没有详细训练记录。</div>`;
+  $("#history-list").innerHTML = history.records.length ? history.records.slice().reverse().map((record) => { const exercise = (app.data.allExercises || app.data.exercises).find((item) => item.id === record.exerciseId); return `<div class="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-white/5 bg-white/[0.025] p-4"><div><p class="text-sm font-semibold text-white">${escapeHtml(exercise?.name || record.exerciseName || "已归档动作")}</p><p class="mt-1 text-xs text-slate-500">${escapeHtml(record.actualDate)} · 第 ${record.setNumber} 组</p></div><div class="flex items-center gap-3"><p class="text-sm text-cyan-100">${escapeHtml([record.weight ? `${record.weight}${record.unit}` : "", record.reps ? `${record.reps} 次` : "", record.duration ? `${record.duration} 秒` : "", record.distance ? `${record.distance} km` : ""].filter(Boolean).join(" × ") || "仅记录完成")}</p><button class="ghost-button" data-edit-record="${record.id}" type="button">编辑</button><button class="ghost-button text-rose-300" data-delete-record="${record.id}" type="button">删除</button></div></div>`; }).join("") : `<div class="rounded-xl border border-dashed border-white/10 p-8 text-center text-sm text-slate-500">这个时间范围还没有详细训练记录。</div>`;
 }
 
 function switchView(view) {
@@ -205,7 +205,7 @@ async function skipWorkout(date) {
 async function rescheduleWorkout(date) {
   const actualDate = window.prompt("调整到哪一天？请使用 YYYY-MM-DD", date);
   if (!actualDate || actualDate === date) return;
-  try { await request("sessions", { method: "POST", body: { plannedDate: date, actualDate, mode: "detail", status: "rescheduled", clientRequestId: `reschedule:${date}:${actualDate}` } }); await loadBootstrap(date); showToast(`已调整到 ${actualDate}`); } catch (error) { showToast(error.message, "error"); }
+  try { await request("sessions", { method: "POST", body: { plannedDate: date, actualDate, mode: "detail", status: "completed", rescheduled: true, clientRequestId: `reschedule:${date}:${actualDate}` } }); await loadBootstrap(date); showToast(`已调整到 ${actualDate}`); } catch (error) { showToast(error.message, "error"); }
 }
 
 async function submitRecord(form) {
@@ -273,6 +273,27 @@ async function markPartial(id) {
   try { await request(`sessions/${id}`, { method: "PUT", body: { status: "partial" } }); await loadBootstrap(); showToast("已标记为部分完成"); } catch (error) { showToast(error.message, "error"); }
 }
 
+async function editGoal(id) {
+  const goal = app.data.goals.find((item) => item.id === id);
+  if (!goal) return;
+  const text = window.prompt("目标内容", goal.text);
+  if (!text || text === goal.text) return;
+  try { await request(`goals/${id}`, { method: "PUT", body: { text } }); await loadBootstrap(); showToast("目标已更新"); } catch (error) { showToast(error.message, "error"); }
+}
+
+async function editRecord(id) {
+  const record = app.data.records.find((item) => item.id === id);
+  if (!record) return;
+  const reps = window.prompt("实际次数（留空保持不变）", record.reps ?? "");
+  if (reps === null) return;
+  try { await request(`records/${id}`, { method: "PUT", body: { reps: reps === "" ? null : Number(reps) } }); await loadBootstrap(); showToast("训练记录已更新"); } catch (error) { showToast(error.message, "error"); }
+}
+
+async function deleteRecord(id) {
+  if (!window.confirm("确定删除这条训练记录吗？")) return;
+  try { await request(`records/${id}`, { method: "DELETE", body: {} }); await loadBootstrap(); showToast("训练记录已删除"); } catch (error) { showToast(error.message, "error"); }
+}
+
 async function addGoal(form) {
   try { await request("goals", { method: "POST", body: Object.fromEntries(new FormData(form).entries()) }); form.reset(); await loadBootstrap(); showToast("目标已添加"); } catch (error) { showToast(error.message, "error"); }
 }
@@ -286,10 +307,22 @@ async function exportJson() { try { const data = await request("export"); app.da
 
 async function exportCsv() { try { const data = await request("export"); app.data.version = data.version; app.data.backup = data.state.backup; app.lastBackupVersion = data.version; const rows = [["date", "exercise", "weight", "unit", "reps", "duration", "distance", "notes"]]; for (const record of data.state.records) { const exercise = data.state.exercises.find((item) => item.id === record.exerciseId); rows.push([record.actualDate, exercise?.name || record.exerciseName || "", record.weight ?? "", record.unit || "", record.reps ?? "", record.duration ?? "", record.distance ?? "", record.notes || ""]); } download(`fitness-history-${app.data.today}.csv`, rows.map((row) => row.map((value) => `"${String(value).replaceAll('"', '""')}"`).join(",")).join("\n"), "text/csv;charset=utf-8"); showToast("CSV 已导出"); } catch (error) { showToast(error.message, "error"); } }
 
+async function importBackup(file) {
+  try {
+    const imported = JSON.parse(await file.text());
+    const preview = imported.state || imported;
+    if (!window.confirm(`将导入 ${preview.sessions?.length || 0} 个训练会话，默认合并现有数据。继续吗？`)) return;
+    app.data = await request("import", { method: "POST", body: { state: preview, replace: false } });
+    render();
+    showToast("备份已导入");
+  } catch (error) { showToast(error.message, "error"); }
+}
+
 document.addEventListener("submit", async (event) => {
   const form = event.target;
   event.preventDefault();
   if (form.id === "auth-form") { try { await request("auth", { method: "POST", body: { passcode: form.passcode.value } }); form.reset(); $("#auth-error").textContent = ""; await loadBootstrap(); } catch (error) { $("#auth-error").textContent = error.message; } }
+  if (form.id === "recovery-form") { try { await request("auth/recover", { method: "POST", body: Object.fromEntries(new FormData(form).entries()) }); form.reset(); $("#auth-error").textContent = ""; await loadBootstrap(); showToast("访问已恢复"); } catch (error) { $("#auth-error").textContent = error.message; } }
   if (form.id === "record-form" || form.classList.contains("record-form")) await submitRecord(form);
   if (form.classList.contains("cardio-form")) await submitRecord(form);
   if (form.id === "goal-form") await addGoal(form);
@@ -310,6 +343,9 @@ document.addEventListener("click", async (event) => {
   if (target.dataset.reschedule) { await rescheduleWorkout(target.dataset.reschedule); return; }
   if (target.dataset.partial) { await markPartial(target.dataset.partial); return; }
   if (target.dataset.goalToggle) { await toggleGoal(target.dataset.goalToggle); return; }
+  if (target.dataset.editGoal) { await editGoal(target.dataset.editGoal); return; }
+  if (target.dataset.editRecord) { await editRecord(target.dataset.editRecord); return; }
+  if (target.dataset.deleteRecord) { await deleteRecord(target.dataset.deleteRecord); return; }
   if (target.dataset.editExercise) { await editExercise(target.dataset.editExercise); return; }
   if (target.dataset.archiveExercise) { await archiveExercise(target.dataset.archiveExercise); return; }
   if (target.dataset.duplicateBlock) { await duplicateBlock(target.dataset.duplicateBlock); return; }
@@ -322,10 +358,7 @@ document.addEventListener("click", async (event) => {
   if (target.id === "reset-data") { if (window.confirm("确定清空全部数据吗？请先导出 JSON 备份。")) { const confirmation = window.prompt("请输入 RESET 确认"); try { app.data = await request("reset", { method: "POST", body: { confirm: confirmation, backupVersion: app.lastBackupVersion || app.data.version } }); render(); showToast("数据已清空"); } catch (error) { showToast(error.message, "error"); } } }
 });
 
-$("#import-json").addEventListener("change", async (event) => {
-  const file = event.target.files?.[0]; if (!file) return;
-  try { const imported = JSON.parse(await file.text()); const preview = imported.state || imported; if (!window.confirm(`将导入 ${preview.sessions?.length || 0} 个训练会话，默认合并现有数据。继续吗？`)) return; app.data = await request("import", { method: "POST", body: { state: preview, replace: false } }); render(); showToast("备份已导入"); } catch (error) { showToast(error.message, "error"); } finally { event.target.value = ""; }
-});
+for (const input of [$("#import-json"), $("#onboarding-import")]) input.addEventListener("change", async (event) => { const file = event.target.files?.[0]; if (file) await importBackup(file); event.target.value = ""; });
 
 $("#history-from").value = addDays(new Date().toISOString().slice(0, 10), -30);
 $("#history-to").value = new Date().toISOString().slice(0, 10);

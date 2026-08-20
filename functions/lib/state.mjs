@@ -59,6 +59,7 @@ export function createEmptyState() {
     backup: { lastExportAt: null },
     settings: structuredClone(DEFAULT_SETTINGS),
     weeklyPlan: {},
+    planSnapshots: [],
     blocks: [],
     exercises: [],
     occurrences: {},
@@ -101,7 +102,9 @@ export function getOccurrence(state, plannedDate) {
     return state.occurrences[plannedDate];
   }
 
-  const occurrence = makeOccurrence(plannedDate, state.weeklyPlan);
+  const snapshots = [...(state.planSnapshots || [])].sort((left, right) => left.effectiveFrom.localeCompare(right.effectiveFrom));
+  const snapshot = snapshots.filter((item) => item.effectiveFrom <= plannedDate).at(-1);
+  const occurrence = makeOccurrence(plannedDate, snapshot?.weeklyPlan || state.weeklyPlan);
   return {
     ...occurrence,
     status: occurrence.kind === "rest" ? "rest" : "planned",
@@ -127,7 +130,7 @@ export function listOccurrences(state, fromDate, days = 14) {
     const session = state.sessions.find((item) => item.plannedDate === date);
     result.push({
       ...occurrence,
-      status: session?.status ?? occurrence.status,
+      status: session?.rescheduled ? "rescheduled" : session?.status ?? occurrence.status,
       sessionId: session?.id ?? null,
       actualDate: session?.actualDate ?? null,
     });

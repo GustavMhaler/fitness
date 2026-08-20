@@ -37,12 +37,6 @@ function toBase64Url(bytes) {
   return btoa(binary).replaceAll("+", "-").replaceAll("/", "_").replaceAll("=", "");
 }
 
-function fromBase64Url(value) {
-  const padded = value.replaceAll("-", "+").replaceAll("_", "/") + "===".slice((value.length + 3) % 4);
-  const binary = atob(padded);
-  return Uint8Array.from(binary, (character) => character.charCodeAt(0));
-}
-
 async function sign(secret, value) {
   const key = await crypto.subtle.importKey("raw", encoder.encode(secret), { name: "HMAC", hash: "SHA-256" }, false, ["sign"]);
   return toBase64Url(new Uint8Array(await crypto.subtle.sign("HMAC", key, encoder.encode(value))));
@@ -116,6 +110,8 @@ function validateState(value) {
   for (const key of ["settings", "weeklyPlan", "blocks", "exercises", "sessions", "records", "goals"]) {
     if (!(key in value)) throw new Error(`备份缺少 ${key}`);
   }
+  if (typeof value.settings !== "object" || typeof value.weeklyPlan !== "object") throw new Error("备份设置或周计划格式无效");
+  for (const key of ["blocks", "exercises", "sessions", "records", "goals"]) if (!Array.isArray(value[key])) throw new Error(`备份字段 ${key} 必须是数组`);
 }
 
 function mergeStates(current, incoming) {
@@ -123,6 +119,7 @@ function mergeStates(current, incoming) {
   merged.initialized = true;
   merged.settings = { ...merged.settings, ...incoming.settings };
   merged.weeklyPlan = { ...merged.weeklyPlan, ...incoming.weeklyPlan };
+  merged.planSnapshots = incoming.planSnapshots ?? merged.planSnapshots;
   for (const key of ["blocks", "exercises", "sessions", "records", "goals"]) {
     const byId = new Map(merged[key].map((item) => [item.id, item]));
     for (const item of incoming[key]) byId.set(item.id, item);
@@ -134,6 +131,14 @@ function mergeStates(current, incoming) {
 
 function findById(collection, id) {
   return collection.find((item) => item.id === id);
+}
+
+function recalculateSession(state, session) {
+  if (!session || session.quickCompleted || session.status === "skipped") return;
+  const occurrence = getOccurrence(state, session.plannedDate);
+  const required = occurrence.blockId ? state.exercises.filter((exercise) => exercise.blockId === occurrence.blockId && !exercise.archived) : [];
+  const performed = new Set(state.records.filter((record) => record.sessionId === session.id).map((record) => record.plannedExerciseId || record.exerciseId));
+  session.status = required.length > 0 && required.every((exercise) => performed.has(exercise.id)) ? "completed" : performed.size > 0 ? "partial" : "in-progress";
 }
 
 function collectHistory(state, from, to, exerciseId) {
@@ -153,7 +158,7 @@ function collectHistory(state, from, to, exerciseId) {
   const occurrences = occurrenceDates.map((date) => {
     const occurrence = getOccurrence(state, date);
     const session = state.sessions.find((item) => item.plannedDate === date);
-    return { ...occurrence, status: session?.status ?? occurrence.status };
+    return { ...occurrence, status: session?.rescheduled ? "rescheduled" : session?.status ?? occurrence.status };
   });
   const trendCounts = new Map();
   for (const record of records) trendCounts.set(record.exerciseId, (trendCounts.get(record.exerciseId) || 0) + 1);
@@ -170,7 +175,8 @@ function collectHistory(state, from, to, exerciseId) {
 
 export function createApi(env = {}) {
   const store = env.store ?? (env.DB ? new D1Store(env.DB) : fallbackStore);
-  const configuredPasscode = env.ACCESS_PASSPHRASE || "change-me";
+  const configuredPasscode = env.ACCESS_PASSPHRASE || (env.CF_PAGES ? null : "change-me");
+  const tokenSecret = configuredPasscode || String(env.ACCESS_RECOVERY_TOKEN || "unconfigured");
 
   return {
     async fetch(request) {
@@ -183,14 +189,27 @@ export function createApi(env = {}) {
         const current = await store.read();
 
         if (path === "auth" && method === "POST") {
+          if (!configuredPasscode) return json({ error: "服务端尚未配置访问口令" }, 503);
           const passcode = String(body.passcode ?? "");
           if (!(await verifyPasscode(passcode, current.state, configuredPasscode))) return json({ error: "访问口令不正确" }, 401);
-          const token = await issueToken(configuredPasscode, current.state.access?.authVersion ?? 1);
+          const token = await issueToken(tokenSecret, current.state.access?.authVersion ?? 1);
           const secure = url.protocol === "https:" ? "; Secure" : "";
           return json({ ok: true }, 200, { "set-cookie": `${COOKIE_NAME}=${encodeURIComponent(token)}; Max-Age=${MAX_AGE_SECONDS}; HttpOnly; SameSite=Lax; Path=/${secure}` });
         }
 
-        const authenticated = await verifyToken(parseCookie(request, COOKIE_NAME), configuredPasscode, current.state.access?.authVersion ?? 1);
+        if (path === "auth/recover" && method === "POST") {
+          if (!env.ACCESS_RECOVERY_TOKEN || !constantTimeEqual(String(body.recoveryToken || ""), String(env.ACCESS_RECOVERY_TOKEN))) return json({ error: "恢复凭据不正确" }, 403);
+          const nextPasscode = String(body.newPasscode ?? "");
+          if (nextPasscode.length < 6) return json({ error: "新口令至少需要 6 位" }, 400);
+          const result = await store.update(async (state) => {
+            const salt = crypto.randomUUID();
+            state.access = { overrideSalt: salt, overrideHash: await getPasscodeHash(nextPasscode, salt), authVersion: (state.access?.authVersion ?? 1) + 1 };
+          }, current.version);
+          const token = await issueToken(tokenSecret, result.state.access.authVersion);
+          return json({ ok: true }, 200, { "set-cookie": `${COOKIE_NAME}=${encodeURIComponent(token)}; Max-Age=${MAX_AGE_SECONDS}; HttpOnly; SameSite=Lax; Path=/` });
+        }
+
+        const authenticated = await verifyToken(parseCookie(request, COOKIE_NAME), tokenSecret, current.state.access?.authVersion ?? 1);
         if (!authenticated) return json({ error: "请先输入访问口令" }, 401);
 
         if (path === "auth" && method === "DELETE") {
@@ -205,7 +224,7 @@ export function createApi(env = {}) {
             const salt = crypto.randomUUID();
             state.access = { overrideSalt: salt, overrideHash: await getPasscodeHash(nextPasscode, salt), authVersion: (state.access?.authVersion ?? 1) + 1 };
           }, current.version);
-          const token = await issueToken(configuredPasscode, result.state.access.authVersion);
+          const token = await issueToken(tokenSecret, result.state.access.authVersion);
           return json({ ok: true }, 200, { "set-cookie": `${COOKIE_NAME}=${encodeURIComponent(token)}; Max-Age=${MAX_AGE_SECONDS}; HttpOnly; SameSite=Lax; Path=/` });
         }
 
@@ -218,7 +237,9 @@ export function createApi(env = {}) {
           const mode = body.mode === "seed" ? "seed" : "blank";
           const result = await store.update((state) => {
             Object.assign(state, mode === "seed" ? createSeedState() : { ...createEmptyState(), initialized: true });
-            materializeOccurrences(state, addDays(getToday(state.settings.timezone), -30));
+            const today = getToday(state.settings.timezone);
+            state.planSnapshots = [{ effectiveFrom: today, weeklyPlan: structuredClone(state.weeklyPlan) }];
+            materializeOccurrences(state, addDays(today, -30));
           }, current.version);
           return json(clientData(result.state, result.version));
         }
@@ -234,12 +255,16 @@ export function createApi(env = {}) {
           const result = await store.update((state) => {
             const next = body.weeklyPlan ?? body.days;
             if (!next || typeof next !== "object") throw new Error("周计划格式无效");
+            const today = getToday(state.settings.timezone);
+            const lastSnapshot = state.planSnapshots?.at(-1);
+            if (!lastSnapshot || lastSnapshot.effectiveFrom !== today) {
+              state.planSnapshots = [...(state.planSnapshots || []), { effectiveFrom: today, weeklyPlan: structuredClone(state.weeklyPlan) }];
+            }
             state.weeklyPlan = Object.fromEntries(Array.from({ length: 7 }, (_, index) => {
               const day = String(index + 1);
               const item = next[day] ?? next[index + 1] ?? { kind: "rest" };
               return [day, { kind: item.kind, blockId: item.blockId ?? null, cardioDesc: item.cardioDesc ?? null }];
             }));
-            const today = getToday(state.settings.timezone);
             for (const date of Object.keys(state.occurrences)) {
               if (date > today) {
                 const occurrence = makeOccurrence(date, state.weeklyPlan);
@@ -353,6 +378,7 @@ export function createApi(env = {}) {
               actualDate: String(body.actualDate || plannedDate),
               status: body.status || (body.mode === "quick" ? "completed" : "in-progress"),
               quickCompleted: body.mode === "quick",
+              rescheduled: Boolean(body.rescheduled),
               notes: String(body.notes || ""),
               exerciseStates: body.exerciseStates || {},
               clientRequestId: body.clientRequestId || null,
@@ -370,7 +396,7 @@ export function createApi(env = {}) {
           const result = await store.update((state) => {
             const session = findById(state.sessions, sessionMatch[1]);
             if (!session) throw new Error("训练会话不存在");
-            for (const key of ["plannedDate", "actualDate", "status", "notes", "exerciseStates"]) if (body[key] !== undefined) session[key] = body[key];
+            for (const key of ["plannedDate", "actualDate", "status", "notes", "exerciseStates", "rescheduled"]) if (body[key] !== undefined) session[key] = body[key];
             session.quickCompleted = body.quickCompleted ?? session.quickCompleted;
             session.updatedAt = new Date().toISOString();
             return session;
@@ -426,13 +452,17 @@ export function createApi(env = {}) {
             if (!record) throw new Error("训练记录不存在");
             for (const key of ["weight", "unit", "reps", "duration", "distance", "quantity", "assistance", "notes", "setNumber"]) if (body[key] !== undefined) record[key] = body[key];
             record.updatedAt = new Date().toISOString();
+            recalculateSession(state, findById(state.sessions, record.sessionId));
             return record;
           }, expectedVersion(body, request));
           return json({ record: result.result, version: result.version });
         }
         if (recordMatch && method === "DELETE") {
           const result = await store.update((state) => {
+            const record = findById(state.records, recordMatch[1]);
+            if (!record) throw new Error("训练记录不存在");
             state.records = state.records.filter((record) => record.id !== recordMatch[1]);
+            recalculateSession(state, findById(state.sessions, record.sessionId));
           }, expectedVersion(body, request));
           return json({ ok: true, version: result.version });
         }
@@ -479,6 +509,7 @@ export function createApi(env = {}) {
 
         if (path === "reset" && method === "POST") {
           if (body.confirm !== "RESET") return json({ error: "请输入 RESET 确认清空" }, 400);
+          if (!current.state.backup?.lastExportAt) return json({ error: "请先导出当前数据备份，再清空" }, 400);
           if (String(body.backupVersion) !== String(current.version)) return json({ error: "请先导出当前版本备份，再清空数据" }, 400);
           const result = await store.update((state) => {
             const access = state.access;

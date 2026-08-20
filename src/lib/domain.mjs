@@ -20,7 +20,7 @@ export function makeOccurrence(plannedDate, weeklyPlan) {
 
   return {
     plannedDate,
-    weekday,
+    dayOfWeek: weekday,
     kind: assignment.kind,
     blockId: assignment.blockId ?? null,
     cardioDesc: assignment.cardioDesc ?? null,

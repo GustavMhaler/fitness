@@ -42,7 +42,7 @@ test("plan occurrences use ISO weekdays and preserve their date", () => {
     }),
     {
       plannedDate: "2026-08-20",
-      weekday: 4,
+      dayOfWeek: 4,
       kind: "block",
       blockId: 1,
       cardioDesc: null,

@@ -27,7 +27,7 @@ pnpm build
 
 1. 复制 `wrangler.toml.example` 为 `wrangler.toml`，填入 D1 `database_id`。
 2. 创建数据库并执行 `schema.sql`。
-3. 在 Cloudflare Pages/项目环境配置 `ACCESS_PASSPHRASE` secret。
+3. 在 Cloudflare Pages/项目环境配置 `ACCESS_PASSPHRASE` 和独立的 `ACCESS_RECOVERY_TOKEN` secret。
 4. 执行 `pnpm build`，再使用 Pages 部署命令发布 `dist` 和 Functions。
 
 首次进入应用时，可选择内置 A/B/C 示例计划或空白计划。示例初始化由 API 幂等处理，不会覆盖已有数据。
