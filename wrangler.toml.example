@@ -1,0 +1,9 @@
+name = "fitness-manager"
+compatibility_date = "2026-08-20"
+pages_build_output_dir = "./dist"
+
+# Fill these values before deploying to Pages.
+[[d1_databases]]
+binding = "DB"
+database_name = "fitness-db"
+database_id = "replace-with-your-d1-database-id"

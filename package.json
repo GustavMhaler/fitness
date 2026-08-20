@@ -1,0 +1,25 @@
+{
+  "name": "fitness-manager",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "packageManager": "pnpm@11.22.0",
+  "scripts": {
+    "dev": "astro dev",
+    "build": "astro build",
+    "preview": "astro preview",
+    "test": "node --test",
+    "typecheck": "astro check"
+  },
+  "dependencies": {
+    "astro": "^7.0.0",
+    "motion": "^12.23.24",
+    "tailwindcss": "^4.1.0"
+  },
+  "devDependencies": {
+    "@astrojs/check": "^0.9.10",
+    "@tailwindcss/vite": "^4.1.0",
+    "typescript": "^6.0.3",
+    "wrangler": "^4.0.0"
+  }
+}
