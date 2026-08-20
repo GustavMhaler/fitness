@@ -6,4 +6,4 @@ pages_build_output_dir = "./dist"
 [[d1_databases]]
 binding = "DB"
 database_name = "fitness-db"
-database_id = "replace-with-your-d1-database-id"
+database_id = "03263dcd-390c-4185-8884-677f27971bb4"
